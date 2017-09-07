@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 2.8.3)
 project(yeti_snowplow)
 
+# compile with C++11
+# https://github.com/ros-planning/geometric_shapes/pull/50#issuecomment-236972774
+add_compile_options("-std=c++11")
+
 ## Find catkin macros and libraries
 ## if COMPONENTS list like find_package(catkin REQUIRED COMPONENTS xyz)
 ## is used, also find other catkin packages
@@ -54,9 +58,9 @@ add_message_files(
   location_point.msg
   obstacle.msg
   obstacles.msg
-  robot_position.msg
   target.msg
   turn.msg
+  lidar_point.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -178,6 +182,10 @@ target_link_libraries(yeti_scan_to_xy ${catkin_LIBRARIES})
 add_executable(localization_node src/localization_node.cpp)
 add_dependencies(localization_node ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(localization_node ${catkin_LIBRARIES})
+
+add_executable(buffer src/buffer.cpp)
+add_dependencies(buffer ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(buffer ${catkin_LIBRARIES})
 
 #############
 ## Install ##
