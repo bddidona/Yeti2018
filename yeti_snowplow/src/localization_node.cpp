@@ -3,7 +3,8 @@
 
 #include <ros/ros.h>
 #include <geometry_msgs/Pose2D.h>
-// #include <sensor_msgs/PointCloud.h>
+#include <geometry_msgs/Twist.h>
+#include <sensor_msgs/PointCloud.h>
 #include <yeti_snowplow/obstacle.h>
 #include <yeti_snowplow/obstacles.h>
 #include <fstream>
@@ -15,11 +16,17 @@
 
 using namespace std;
 
-ros::Publisher pub;//ROS publisher
+ros::Publisher pubLocation;//ROS publisher
+ros::Publisher pubVelocity;//ROS publisher
 
-// sensor_msgs::PointCloud landmarkLocationsTxt;//holds landmark locations from text file
+sensor_msgs::PointCloud landmarkLocationsTxt;//holds landmark locations from text file
+bool needToCorrectLandmarks = true;
+vector<yeti_snowplow::obstacle> correctedLandmarks;
 geometry_msgs::Pose2D previousRobotLocation;//holds previous robot location
 // static private LocationPoint previousRobotLocation = new LocationPoint();
+double landmarkTolerance = 0.0;
+bool enableLogging;
+geometry_msgs::Twist velocity;
 
 //find the landmark locations, with respect to where Yeti was. 
 // void scanLandmarks(sensor_msgs::PointCloud landmarkLocsTXT, sensor_msgs::PointCloud* scan_pt_cloud, geometry_msgs::Pose2D prev_robot_location)
@@ -31,67 +38,70 @@ geometry_msgs::Pose2D previousRobotLocation;//holds previous robot location
 // }
 
 //Used to parse strings. because C++ doesn't have built in string splitting http://stackoverflow.com/a/236803
-// void split(const std::string &s, char delim, std::vector<std::string> &elems) 
-// {
-//     std::stringstream ss;
-//     ss.str(s);
-//     std::string item;
-//     while (std::getline(ss, item, delim)) {
-//         elems.push_back(item);
-//     }
-// }
+void split(const std::string &s, char delim, std::vector<std::string> &elems) 
+{
+    std::stringstream ss;
+    ss.str(s);
+    std::string item;
+    while (std::getline(ss, item, delim)) {
+        elems.push_back(item);
+    }
+}
 
-// std::vector<std::string> split(const std::string &s, char delim) 
-// {
-//     std::vector<std::string> elems;
-//     split(s, delim, elems);
-//     return elems;
-// }
+std::vector<std::string> split(const std::string &s, char delim) 
+{
+    std::vector<std::string> elems;
+    split(s, delim, elems);
+    return elems;
+}
 
-//gater landmarks from text file. Text file is in ROS PARAM.
-// sensor_msgs::PointCloud importLandMarks(string filename)
-// {
-// 	//setup necassry string parsing and file parameters
-// 	string str;
-// 	ifstream file;
-// 	file.open(filename.c_str());
-// 	ROS_INFO("Read file line: %s", str.c_str());
+//get landmarks from text file. Text file is in ROS PARAM.
+sensor_msgs::PointCloud importLandMarks(string filename)
+{
+	//setup necassry string parsing and file parameters
+	string str;
+	ifstream file;
+	file.open(filename.c_str());
+	// ROS_INFO("Read file line: %s", str.c_str());
 
-// 	int numLandmarks = 0;
-// 	while(getline(file, str))//check to see how many landmarks there are
-// 	{
-// 		numLandmarks++;
-// 	}
-// 	ROS_INFO("There are %d landmarks. They are: ", numLandmarks);
-// 	file.close();
+	int numLandmarks = 0;
+	while(getline(file, str))//check to see how many landmarks there are
+	{
+		numLandmarks++;
+	}
+	file.close();
 
-// 	sensor_msgs::PointCloud importedLandmarkLocations;//allocate space for landmark points
-// 	int landmarkNum=0;// initialize iterator
-// 	file.open(filename.c_str());//reopen file
+	sensor_msgs::PointCloud importedLandmarkLocations;//allocate space for landmark points
+	int landmarkNum=0;// initialize iterator
+	file.open(filename.c_str());//reopen file
 
-// 	while(getline(file, str))//loop through file and save landmark locations. 
-// 	{
-// 		//ROS_INFO("Read file line: %s", str.c_str());
-// 		vector<string> lineFields = split(str, ' '); //x y direction PID speed
-// 		//ROS_INFO("Line %d has %ld many fields.", landmarkNum, lineFields.size());
+	while(getline(file, str))//loop through file and save landmark locations. 
+	{
+		//ROS_INFO("Read file line: %s", str.c_str());
+		vector<string> lineFields = split(str, ' '); //x y direction PID speed
+		//ROS_INFO("Line %d has %ld many fields.", landmarkNum, lineFields.size());
 		
-// 		if(lineFields.size() == 2) //ignore if too short or starts with "// "
-// 		{ 
-// 			geometry_msgs::Point32 landmarkPoint;
-// 			landmarkPoint.x=atof(lineFields[0].c_str());
-// 			landmarkPoint.y=atof(lineFields[1].c_str());
-// 			// importedLandmarkLocations.points[landmarkNum].x = atof(lineFields[0].c_str());
-// 			// importedLandmarkLocations.points[landmarkNum].y = atof(lineFields[1].c_str());
-// 			ROS_INFO("Landmark %d: \tX: %f\tY:%f",landmarkNum, landmarkPoint.x, landmarkPoint.y);
-// 			landmarkNum++;
+		if(lineFields.size() == 2) //ignore if too short or starts with "// "
+		{ 
+			geometry_msgs::Point32 landmarkPoint;
+			landmarkPoint.x=atof(lineFields[0].c_str());
+			landmarkPoint.y=atof(lineFields[1].c_str());
+			// importedLandmarkLocations.points[landmarkNum].x = atof(lineFields[0].c_str());
+			// importedLandmarkLocations.points[landmarkNum].y = atof(lineFields[1].c_str());
+			landmarkNum++;
 
-// 			importedLandmarkLocations.points.push_back(landmarkPoint);
-// 		}
-// 	}
-// 	file.close();
+			importedLandmarkLocations.points.push_back(landmarkPoint);
+		}
+	}
+	file.close();
 
-// 	return landmarkLocationsTxt;
-// }
+	ROS_INFO("There are %d landmarks. They are: ", (int)importedLandmarkLocations.points.size());
+	for(int i = 0; i < importedLandmarkLocations.points.size(); i++){
+		ROS_INFO("Landmark %d: \tX: %f\tY:%f", i, importedLandmarkLocations.points[i].x, importedLandmarkLocations.points[i].y);
+	}
+
+	return importedLandmarkLocations;
+}
 
 geometry_msgs::Pose2D DetermineRobotLocation_old(vector<yeti_snowplow::obstacle> CLM, geometry_msgs::Pose2D robotLocation, double tolerance, float Lspeed, float Rspeed, float minSpeed)
 {
@@ -260,6 +270,11 @@ geometry_msgs::Pose2D DetermineRobotLocation_old(vector<yeti_snowplow::obstacle>
 		//Console.WriteLine("x=%f\ty=%f\tt=%f\td=%02f\r", thisRobotLocation.x, thisRobotLocation.y, thisRobotLocation.theta, derr);
 	}
 
+	double dxLoc = thisRobotLocation.x - previousRobotLocation.x;
+	double dyLoc = thisRobotLocation.y - previousRobotLocation.y;
+	velocity.linear.x = sqrt(dxLoc * dxLoc + dyLoc * dyLoc);
+	velocity.angular.z = atan2(dxLoc, dyLoc);
+
 	previousRobotLocation.x = thisRobotLocation.x;
 	previousRobotLocation.y = thisRobotLocation.y;
 	previousRobotLocation.theta = thisRobotLocation.theta; 
@@ -328,32 +343,75 @@ geometry_msgs::Pose2D DetermineRobotLocation_old(vector<yeti_snowplow::obstacle>
 // 		}
 // }
 
-void obstacleCallback (const yeti_snowplow::obstacles::ConstPtr& obstacles){
-	//determine robot location or something
+void correctLandmarks(vector<yeti_snowplow::obstacle> currentObstacles){
+	for (auto&& knownLandmark : landmarkLocationsTxt.points){
+		double minMatchDist = 15;
+		double maxSeperationDist = .5;
+		yeti_snowplow::obstacle* closestObstacle = NULL; 
+
+		//look through landmarks that you see
+		//calculate distances for all of them
+		//assign the closest one to the current one we're looking at in the file
+		for (auto&& currentObstacle : currentObstacles){
+			double distanceObstacleToLandmark = sqrt(pow(knownLandmark.x - currentObstacle.x,2) + pow(knownLandmark.y - currentObstacle.y,2));
+			if (distanceObstacleToLandmark < minMatchDist){ //is this closer than the last match?
+				if (distanceObstacleToLandmark < maxSeperationDist){
+					minMatchDist = distanceObstacleToLandmark;
+					closestObstacle = &currentObstacle;
+				}
+			}
+		}
+		if (closestObstacle == NULL){ //couldn't find a suitable obstacle, dont update, keep landmark the same
+			closestObstacle = new yeti_snowplow::obstacle();
+			closestObstacle->x = knownLandmark.x;
+			closestObstacle->y = knownLandmark.y;
+		}
+		correctedLandmarks.push_back(*closestObstacle);
+	}
 }
 
-main (int argc, char** argv)
-{
-	ros::init (argc, argv, "localization");
+void obstacleCallback(const yeti_snowplow::obstacles::ConstPtr& obstacles){
+	if(needToCorrectLandmarks){
+		correctLandmarks(obstacles->obstacles);
+		needToCorrectLandmarks = false;
+	}
+	//determine robot location
+	//(vector<yeti_snowplow::obstacle> CLM, geometry_msgs::Pose2D robotLocation, double tolerance, float Lspeed, float Rspeed, float minSpeed)
+	geometry_msgs::Pose2D robotLocation = DetermineRobotLocation_old(correctedLandmarks, previousRobotLocation, landmarkTolerance, 0.0, 0.0, 0.0);
+	pubLocation.publish(robotLocation);
+	
+	pubVelocity.publish(velocity);
+}
+
+main(int argc, char** argv){
+	ros::init(argc, argv, "localization");
 	ros::NodeHandle nh;
 	ROS_INFO_STREAM("Finding Landmarks, and Robot Position");
 
+	nh.param("localization_enable_logging", enableLogging, false);
+	nh.param("localization_landmark_tolerance", landmarkTolerance, 0.0);
+
 	//import landmark locations from text file
-	// std::string landmarkLocationFile;
-	// if (ros::param::get("landmarkLocationFile", landmarkLocationFile))
-	// {
-	// 	ROS_INFO("Using landmarkLocationFile %s", landmarkLocationFile.c_str());
-	// }
-	// landmarkLocationsTxt = importLandMarks(landmarkLocationFile);
+	std::string landmarkLocationFile;
+	if (ros::param::get("localizaion_landmark_location_file", landmarkLocationFile)){
+		ROS_INFO("Using landmarkLocationFile %s", landmarkLocationFile.c_str());
+		landmarkLocationsTxt = importLandMarks(landmarkLocationFile);
+	}
+	else {
+		ROS_ERROR("Localization failed to start: no landmark location file found.");
+		return 1;
+	}
 	
 	// Create a ROS subscriber for the pointcloud published by laser geometry
  	// ros::Subscriber scanSub;
 	// scanSub = nh.subscribe("laser_scan_point_cloud", 1, localizeCallBack);
-	ros::Subscriber obstacleSub = nh.subscribe("obstacles", 1, obstacleCallback);
+	ros::Subscriber obstacleSub = nh.subscribe("/obstacle_detection/obstacles", 1, obstacleCallback);
 
  	// Create a ROS publisher for the output point cloud
 	//  pub = nh.advertise<sensor_msgs::PointCloud>("robot_location", 1);
-	pub = nh.advertise<geometry_msgs::Pose2D>("yeti/robot_location", 1);
+	pubLocation = nh.advertise<geometry_msgs::Pose2D>("/localization/robot_location", 1);
+
+	pubVelocity = nh.advertise<geometry_msgs::Twist>("/localization/velocity", 1);
 
 	ros::spin();
 	return 0;

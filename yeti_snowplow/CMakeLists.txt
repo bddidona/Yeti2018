@@ -21,7 +21,7 @@ find_package(catkin REQUIRED COMPONENTS
 
 ## System dependencies are found with CMake's conventions
 # find_package(Boost REQUIRED COMPONENTS system)
-
+find_library(wiringPi wiringPi ./src/wiringPi)
 
 ## Uncomment this if the package has a setup.py. This macro ensures
 ## modules and global scripts declared therein get installed
@@ -55,12 +55,14 @@ find_package(catkin REQUIRED COMPONENTS
 ## Generate messages in the 'msg' folder
 add_message_files(
   FILES
+  gpio_inputs.msg
+  gpio_leds.msg
+  lidar_point.msg
   location_point.msg
   obstacle.msg
   obstacles.msg
   target.msg
   turn.msg
-  lidar_point.msg
 )
 
 ## Generate services in the 'srv' folder
@@ -154,38 +156,61 @@ include_directories(
 # )
 
 # ADD NEW CPPs HERE
+add_executable(auto_control_logic src/auto_control_logic.cpp)
+add_dependencies(auto_control_logic ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(auto_control_logic ${catkin_LIBRARIES})
+
 add_executable(yeti_drive_mode_control src/yeti_drive_mode_control.cpp)
 add_dependencies(yeti_drive_mode_control ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(yeti_drive_mode_control ${catkin_LIBRARIES})
 
-#add_executable(navigation_pid src/navigation_pid.cpp src/containers/Target.cpp src/containers/LocationPoint.cpp src/containers/CVAR.cpp)
-add_executable(navigation_pid src/navigation_pid.cpp src/containers/CVAR.cpp)
-add_dependencies(navigation_pid ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(navigation_pid ${catkin_LIBRARIES})
+#add_executable(navigation_pid src/navigation_pid.cpp)
+#add_dependencies(navigation_pid ${PROJECT_NAME}_generate_messages_cpp)
+#target_link_libraries(navigation_pid ${catkin_LIBRARIES})
+
+add_executable(navigation_pid_speed src/navigation_pid_speed.cpp)
+add_dependencies(navigation_pid_speed ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(navigation_pid_speed ${catkin_LIBRARIES})
+
+add_executable(navigation_pid_turn src/navigation_pid_turn.cpp)
+add_dependencies(navigation_pid_turn ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(navigation_pid_turn ${catkin_LIBRARIES})
+
+add_executable(navigation_pid_velocity src/navigation_pid_velocity.cpp)
+add_dependencies(navigation_pid_velocity ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(navigation_pid_velocity ${catkin_LIBRARIES})
+
+add_executable(navigation_pid_test src/navigation_pid_test.cpp)
+add_dependencies(navigation_pid_test ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(navigation_pid_test ${catkin_LIBRARIES})
 
 add_executable(obstacle_detection src/obstacle_detection.cpp)
 add_dependencies(obstacle_detection ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(obstacle_detection ${catkin_LIBRARIES})
 
-add_executable(obstacle_reaction src/obstacle_reaction.cpp)
+add_executable(obstacle_reaction src/obstacle_reaction.cpp src/buffer.h)
 add_dependencies(obstacle_reaction ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(obstacle_reaction ${catkin_LIBRARIES})
+
+#add_executable(gpio_monitor src/gpio_monitor.cpp)
+#add_dependencies(gpio_monitor ${PROJECT_NAME}_generate_messages_cpp)
+#target_link_libraries(gpio_monitor ${catkin_LIBRARIES} ${wiringPi})
 
 add_executable(yeti_waypoint_selection src/yeti_waypoint_selection.cpp)
 add_dependencies(yeti_waypoint_selection ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(yeti_waypoint_selection ${catkin_LIBRARIES})
 
-add_executable(yeti_scan_to_xy src/yeti_scan_to_xy_node.cpp)
-add_dependencies(yeti_scan_to_xy ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(yeti_scan_to_xy ${catkin_LIBRARIES})
+#add_executable(yeti_scan_to_xy src/yeti_scan_to_xy_node.cpp)
+#add_dependencies(yeti_scan_to_xy ${PROJECT_NAME}_generate_messages_cpp)
+#target_link_libraries(yeti_scan_to_xy ${catkin_LIBRARIES})
 
 add_executable(localization_node src/localization_node.cpp)
 add_dependencies(localization_node ${PROJECT_NAME}_generate_messages_cpp)
 target_link_libraries(localization_node ${catkin_LIBRARIES})
 
-add_executable(buffer src/buffer.cpp)
-add_dependencies(buffer ${PROJECT_NAME}_generate_messages_cpp)
-target_link_libraries(buffer ${catkin_LIBRARIES})
+add_executable(stall_detection src/stall_detection_node.cpp)
+add_dependencies(stall_detection ${PROJECT_NAME}_generate_messages_cpp)
+target_link_libraries(stall_detection ${catkin_LIBRARIES})
 
 #############
 ## Install ##

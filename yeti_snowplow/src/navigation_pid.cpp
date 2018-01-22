@@ -1,7 +1,7 @@
 #include "ros/ros.h"
+#include "geometry_msgs/Pose2D.h"
 #include "geometry_msgs/Twist.h"
 #include "yeti_snowplow/location_point.h"
-#include "yeti_snowplow/robot_position.h"
 #include "yeti_snowplow/target.h"
 #include "yeti_snowplow/waypoint.h"
 
@@ -12,7 +12,22 @@
 #include <vector>
 using namespace std;
 
-#include "containers/CVAR.h"
+struct CVAR{
+	double targdist;
+    double targbearing;
+    double front;
+    double right;
+    double speed;               // between -1 to 1
+    double turn;                // between -1 to 1
+    double pErr;
+    double lastpErr;
+    double kP;
+    double dErr;
+    double kD;
+    double iErr;
+    double kI;
+    double lookAhead;
+};
 
 ros::Publisher turnPub;
 ros::ServiceClient waypointClient;
@@ -51,10 +66,10 @@ void initPID(){
 	cvar.pErr = cvar.iErr = cvar.dErr = 0;
 }
 
-void localizationCallback(const yeti_snowplow::robot_position::ConstPtr& location){	
+void localizationCallback(const geometry_msgs::Pose2D::ConstPtr& location){	
 	/* This fires every time a new position is published */
 
-	double heading = location->heading;
+	double heading = location->theta;
 	int dir = (int)currentTarget.dir;
 	double dx, dy, s, c, dt;
 	double desiredAngle;
@@ -66,8 +81,16 @@ void localizationCallback(const yeti_snowplow::robot_position::ConstPtr& locatio
 	dx = currentTarget.location.x - location->x;
 	dy = currentTarget.location.y - location->y;
 	
-	c = cos(heading);
-	s = sin(heading);
+	//FIND DISTANCE AND ANGLE TO DESTINATION
+	cvar.targdist = sqrt(dx * dx + dy * dy);//current distance from the robot to the target
+	// desired angle is the desired Heading the robot should have at this instance if it were to be facing the target.
+	desiredAngle = adjust_angle(atan2(dx, dy), 2.0*M_PI);
+
+	//USED FOR WAYPOINT NAVIGATION
+	// cvar.right = dx * c - dy * s;
+	// cvar.front = dy * c + dx * s;
+	// c = cos(heading); //find Cosine term of the robots heading
+	// s = sin(heading); //find sine term of the robots heading
 
 	cvar.speed = currentTarget.speed;
 
